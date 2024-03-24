@@ -426,6 +426,14 @@ static lv_obj_t *makeTextBox(lv_obj_t *parent, const char *prompt, int boxWidth)
 }
 
 
+static lv_obj_t *makeLabelButton(lv_obj_t *parent, const char *labelText) {
+  lv_obj_t *buttonP = settingsUI.cancel = lv_btn_create(parent);
+  lv_obj_t *labelP = lv_label_create(buttonP);
+  lv_label_set_text(labelP, labelText);
+  return buttonP;
+}
+
+
 static void setupSettingsUI(void) {
   lv_obj_t *p;
 
@@ -468,14 +476,12 @@ static void setupSettingsUI(void) {
   // of the screen with their edges (left for OK, right for Cancel)
   // the same distance from the center of the screen in opposite
   // directions.
-  p = settingsUI.ok = lv_btn_create(settingsUI.screen);
-  lv_label_set_text(p, "OK");
+  p = settingsUI.ok = makeLabelButton(settingsUI.screen, "OK");
   lv_obj_set_width(p, 150);
   lv_obj_set_align(p, LV_ALIGN_BOTTOM_LEFT);
   lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, -250, -25);
 
-  p = settingsUI.cancel = lv_btn_create(settingsUI.screen);
-  lv_label_set_text(p, "Cancel");
+  p = settingsUI.cancel = makeLabelButton(settingsUI.screen, "Cancel");
   lv_obj_set_width(p, 150);
   lv_obj_set_align(p, LV_ALIGN_BOTTOM_RIGHT);
   lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, 250, -25);
