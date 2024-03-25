@@ -188,7 +188,7 @@ static struct {
 // Platform API hack so I can test UI on a PC.
 #if LV_PC_SIM
 #include <stdio.h>
-#define ESP_LOGI(TAG, FMT, VA...) printf("[%s]: " FMT, TAG, ##VA)
+#define ESP_LOGI(TAG, FMT, VA...) fprintf(stderr, "[%s]: " FMT "\n", TAG, ##VA)
 #endif
 
 
@@ -311,7 +311,7 @@ static void setupClockUI(void) {
   p = timeUI.settingsButton = lv_btn_create(timeUI.screen);
   lv_obj_align_to(p, timeUI.screen, LV_ALIGN_TOP_RIGHT, 0, 0);
   lv_obj_set_size(p, 32, 32);
-  lv_obj_add_event_cb(p, cogClickedCB, LV_EVENT_CLICKED, NULL);
+  lv_obj_add_event_cb(p, cogClickedCB, LV_EVENT_CLICKED, p);
 
   // The settings (cog) button's image
   lv_obj_t *cogImg = lv_img_create(p);
@@ -414,23 +414,38 @@ static void setupKeyboard(void) {
 }
 
 
-static lv_obj_t *makeTextBox(lv_obj_t *parent, const char *prompt, int boxWidth) {
+static lv_obj_t *makeTextBox(lv_obj_t *parent, const char *prompt, int taWidth) {
   lv_obj_t *group = lv_obj_create(parent);
-  lv_obj_t *p = lv_label_create(group);
-  lv_label_set_text(p, prompt);
-  lv_obj_t *box = lv_textarea_create(group);
-  lv_textarea_set_text(box, "");
-  lv_textarea_set_one_line(box, true);
-  lv_obj_set_width(box, boxWidth);
+  lv_obj_set_size(group, taWidth * 2, LV_SIZE_CONTENT);
+  lv_obj_set_layout(group, LV_LAYOUT_FLEX);
+  lv_obj_set_flex_flow(group, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(group, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START);
+  lv_obj_t *label = lv_label_create(group);
+  lv_label_set_text_static(label, prompt);
+  lv_obj_t *ta = lv_textarea_create(group);
+  lv_textarea_set_text(ta, "");
+  lv_textarea_set_one_line(ta, true);
+  lv_obj_set_width(ta, taWidth);
   return group;
 }
 
 
 static lv_obj_t *makeLabelButton(lv_obj_t *parent, const char *labelText) {
-  lv_obj_t *buttonP = settingsUI.cancel = lv_btn_create(parent);
+  lv_obj_t *buttonP = lv_btn_create(parent);
   lv_obj_t *labelP = lv_label_create(buttonP);
   lv_label_set_text(labelP, labelText);
   return buttonP;
+}
+
+
+static void dialogButtonClickedCB(lv_event_t *ev) {
+  lv_obj_t *p = lv_event_get_user_data(ev);
+
+  if (p == settingsUI.ok) {
+    ESP_LOGI(TAG, "OK click action goes here");
+  } else if (p == settingsUI.cancel) {
+    lv_screen_load(timeUI.screen);
+  }
 }
 
 
@@ -458,7 +473,7 @@ static void setupSettingsUI(void) {
   p = settingsUI.showDayDate = lv_checkbox_create(settingsUI.screen);
   lv_checkbox_set_text(p, "Show day/date");
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 10);
-  lv_obj_align_to(p, settingsUI.showDayDate, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  lv_obj_align_to(p, settingsUI.showSeconds, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
 
   p = settingsUI.ntp[0] = makeTextBox(settingsUI.screen, "NTP #1:", 220);
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -478,13 +493,13 @@ static void setupSettingsUI(void) {
   // directions.
   p = settingsUI.ok = makeLabelButton(settingsUI.screen, "OK");
   lv_obj_set_width(p, 150);
-  lv_obj_set_align(p, LV_ALIGN_BOTTOM_LEFT);
-  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, -250, -25);
+  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, -100, -75);
+  lv_obj_add_event_cb(p, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
 
   p = settingsUI.cancel = makeLabelButton(settingsUI.screen, "Cancel");
   lv_obj_set_width(p, 150);
-  lv_obj_set_align(p, LV_ALIGN_BOTTOM_RIGHT);
-  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, 250, -25);
+  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, 100, -75);
+  lv_obj_add_event_cb(p, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
 
   lv_obj_update_layout(settingsUI.screen);
 }
@@ -599,6 +614,7 @@ static lv_display_t * hal_init(int32_t w, int32_t h)
 
 #if LV_PC_SIM
 int main(int argc, char *argv[]) {
+  setlinebuf(stderr);
   lv_init();
   hal_init(800, 480);
 
