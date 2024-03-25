@@ -134,6 +134,7 @@ static struct {
   lv_obj_t *twelveHr;		/* Checkbox */
   lv_obj_t *showSeconds;	/* Checkbox */
   lv_obj_t *showDayDate;	/* Checkbox */
+  lv_obj_t *ntpGrid;		/* Grid for NTP text boxes */
   lv_obj_t *ntp[N_NTP_SERVERS];	/* Each is a textarea */
   lv_obj_t *tzString;		/* Timezone in TZ envar format (e.g., PST-08 for US Pacific) */
   lv_obj_t *ok;			/* Button */
@@ -475,9 +476,32 @@ static void setupSettingsUI(void) {
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 10);
   lv_obj_align_to(p, settingsUI.showSeconds, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
 
+  static const int32_t ntpRowHeight = 35;
+  static const int32_t ntpGridCols[] = {150, 250, LV_GRID_TEMPLATE_LAST};
+  static const int32_t ntpGridRows[] = {ntpRowHeight, ntpRowHeight, ntpRowHeight, LV_GRID_TEMPLATE_LAST};
+  settingsUI.ntpGrid = lv_obj_create(settingsUI.screen);
+  lv_obj_set_grid_dsc_array(settingsUI.ntpGrid, ntpGridCols, ntpGridRows);
+  lv_obj_set_layout(settingsUI.ntpGrid, LV_LAYOUT_GRID);
+  lv_obj_set_size(settingsUI.ntpGrid, 450, ntpRowHeight * 3 + 100);
+  lv_obj_align(settingsUI.ntpGrid, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  lv_obj_align_to(settingsUI.ntpGrid, settingsUI.twelveHr, LV_ALIGN_TOP_LEFT, 200, 0);
+
+  for (int k = 0; k < 3; ++k) {
+    lv_obj_t *label = lv_label_create(settingsUI.ntpGrid);
+    lv_label_set_text_fmt(label, "NTP #%d", k);
+    lv_obj_set_grid_cell(label, LV_GRID_ALIGN_END, 0, 1, LV_GRID_ALIGN_CENTER, k, 1);
+    lv_obj_t *ta = lv_textarea_create(settingsUI.ntpGrid);
+    lv_textarea_set_text(ta, "");
+    lv_textarea_set_one_line(ta, true);
+    lv_obj_set_width(ta, 220);
+    lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, k, 1);
+    settingsUI.ntp[k] = ta;
+  }
+
+  /*
   p = settingsUI.ntp[0] = makeTextBox(settingsUI.screen, "NTP #1:", 220);
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-  lv_obj_align_to(p, settingsUI.twelveHr, LV_ALIGN_BOTTOM_LEFT, 400, 0);
+  lv_obj_align_to(p, settingsUI.twelveHr, LV_ALIGN_BOTTOM_LEFT, 200, 0);
 
   p = settingsUI.ntp[1] = makeTextBox(settingsUI.screen, "NTP #2:", 220);
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 0);
@@ -486,6 +510,7 @@ static void setupSettingsUI(void) {
   p = settingsUI.ntp[2] = makeTextBox(settingsUI.screen, "NTP #3:", 220);
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 0);
   lv_obj_align_to(p, settingsUI.ntp[1], LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  */
 
   // Buttons are in a horizontal row aligned a little above the bottom
   // of the screen with their edges (left for OK, right for Cancel)
