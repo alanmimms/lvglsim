@@ -1,6 +1,6 @@
 *~
 .*~
-build
-bin
+build/
+bin/
 *.o
 *.c.o
