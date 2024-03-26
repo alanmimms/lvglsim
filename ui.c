@@ -3,6 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 #include "lvgl.h"
+#include "settings.h"
 
 static const char *TAG = "wallclockUI";
 
@@ -164,15 +165,7 @@ static struct {
 // The settings as they are currently set. These come from NVS
 // initially, are modified by the settingsUI, wifiUI, and passwordUI,
 // and are saved back to NVS when changed.
-static struct {
-  uint8_t twelveHr;	  /* Set if 12hr is needed (24hr otherwise) */
-  uint8_t showSeconds;	  /* Display and update seconds */
-  uint8_t showDayDate;	  /* Display day of week and date */
-  char *tz;		  /* String for TZ envar */
-  char *ntp[3];		  /* String for NTP sites */
-  char *ssid;		  /* String for current selected WiFi SSID */
-  char *password;	  /* String for current selected Wifi SSID's password */
-} settings = {
+static const Settings initialSettings = {
   .twelveHr = 0,
   .showSeconds = 1,
   .showDayDate = 1,
@@ -183,6 +176,11 @@ static struct {
   .ssid = "My Sooper Seekyure WiFi",
   .password = "s00per-skeQret",
 };
+
+// When there are no NVS based settings values, this has to be
+// initialized by ReadSettings() to use malloc() based strings.
+Settings settings;
+extern void ReadSettings(void);
 
 
 // Platform API hack so I can test UI on a PC.
@@ -669,6 +667,7 @@ static void buttonEventCB(lv_event_t *e) {
 
 
 void SetupWallclockUI(void) {
+  ReadSettings();
   setupStyles();
   setupClockUI();
   setupKeyboard();
@@ -713,6 +712,18 @@ static lv_display_t * hal_init(int32_t w, int32_t h)
 
 
 #if LV_PC_SIM
+// This is used for mocking the NVS based settings when we're just
+// testing the UI.
+void ReadSettings(void) {
+  settings = initialSettings;
+
+  settings.tz = strdup(initialSettings.tz);
+  for (int k=0; k < 3; ++k) settings.ntp[k] = strdup(initialSettings.ntp[k]);
+  settings.ssid = strdup(initialSettings.ssid);
+  settings.password = strdup(initialSettings.password);
+}
+
+
 int main(int argc, char *argv[]) {
   setlinebuf(stderr);
   lv_init();
