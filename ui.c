@@ -136,7 +136,8 @@ static struct {
   lv_obj_t *showDayDate;	/* Checkbox */
   lv_obj_t *ntpGrid;		/* Grid for NTP text boxes */
   lv_obj_t *ntp[N_NTP_SERVERS];	/* Each is a textarea */
-  lv_obj_t *tzString;		/* Timezone in TZ envar format (e.g., PST-08 for US Pacific) */
+  lv_obj_t *tzGrid;		/* Grid for TZ text box */
+  lv_obj_t *tz;			/* Timezone in TZ envar format (e.g., PST-08 for US Pacific) */
   lv_obj_t *ok;			/* Button */
   lv_obj_t *cancel;		/* Button */
 } settingsUI;
@@ -168,9 +169,7 @@ static struct {
   uint8_t showSeconds;	  /* Display and update seconds */
   uint8_t showDayDate;	  /* Display day of week and date */
   char *tz;		  /* String for TZ envar */
-  char *ntp1;		  /* String for primary NTP site */
-  char *ntp2;		  /* String for secondary NTP site */
-  char *ntp3;		  /* String for tertiary NTP site */
+  char *ntp[3];		  /* String for NTP sites */
   char *ssid;		  /* String for current selected WiFi SSID */
   char *password;	  /* String for current selected Wifi SSID's password */
 } settings = {
@@ -178,9 +177,9 @@ static struct {
   .showSeconds = 1,
   .showDayDate = 1,
   .tz = "PST",
-  .ntp1 = "pool.ntp.org",
-  .ntp2 = "time.google.com",
-  .ntp3 = "clock.uregina.ca",
+  .ntp[0] = "pool.ntp.org",
+  .ntp[1] = "time.google.com",
+  .ntp[2] = "clock.uregina.ca",
   .ssid = "My Sooper Seekyure WiFi",
   .password = "s00per-skeQret",
 };
@@ -189,7 +188,9 @@ static struct {
 // Platform API hack so I can test UI on a PC.
 #if LV_PC_SIM
 #include <stdio.h>
-#define ESP_LOGI(TAG, FMT, VA...) fprintf(stderr, "[%s]: " FMT "\n", TAG, ##VA)
+#define ESP_LOGI(TAG, FMT, VA...) fprintf(stderr, "[Info] %25s: " FMT "\n", TAG, ##VA)
+#define ESP_LOGW(TAG, FMT, VA...) fprintf(stderr, "[Warn] %25s: " FMT "\n", TAG, ##VA)
+#define ESP_LOGE(TAG, FMT, VA...) fprintf(stderr, "[Err!] %25s: " FMT "\n", TAG, ##VA)
 #endif
 
 
@@ -237,8 +238,7 @@ static void secondsCB(lv_timer_t *timerP) {
 
 
 static void cogClickedCB(lv_event_t *ev) {
-  ESP_LOGI(TAG, "cog clicked event code=%d (%s)", ev->code, evToName[ev->code]);
-  if (ev->code == LV_EVENT_CLICKED) lv_scr_load(settingsUI.screen);
+  lv_scr_load(settingsUI.screen);
 }
 
 
@@ -305,7 +305,7 @@ static void setupClockUI(void) {
   // The NTP source site in status bar
   p = timeUI.ntpName = lv_label_create(timeUI.screen);
   lv_obj_set_align(p, LV_ALIGN_BOTTOM_RIGHT);
-  lv_label_set_text_static(p, settings.ntp1);
+  lv_label_set_text_static(p, settings.ntp[0]);
   lv_obj_set_width(p, LV_SIZE_CONTENT);
 
   // The settings (cog) button
@@ -323,9 +323,6 @@ static void setupClockUI(void) {
   lv_obj_update_layout(timeUI.screen);
 
   lv_scr_load(timeUI.screen);
-  ESP_LOGI(TAG, "after update layout/scr load cog pos=(%d %d)  size=(%d %d)",
-	   (int) lv_obj_get_x(p), (int) lv_obj_get_y(p),
-	   (int) lv_obj_get_width(p), (int) lv_obj_get_height(p));
 
   lv_timer_create(secondsCB, 1000, NULL);
 }
@@ -439,14 +436,62 @@ static lv_obj_t *makeLabelButton(lv_obj_t *parent, const char *labelText) {
 }
 
 
+static void settingsDismiss(void) {
+  lv_screen_load(timeUI.screen);
+}
+
+
+static int getChecked(lv_obj_t *checkbox) {
+  return lv_obj_get_state(checkbox);
+}
+
+
+static char *setMallocString(char **stringPP, const char *valueP) {
+
+  if (*stringPP) {
+    free(*stringPP);
+    *stringPP = NULL;
+  }
+
+  int len = strlen(valueP) + 1;
+  *stringPP = strdup(valueP);
+
+  if (!*stringPP) ESP_LOGE(TAG, "Failed to allocate %d bytes in strdup()!", len);
+
+  return *stringPP;
+}
+
+
+static void settingsHandleOK(void) {
+  settings.twelveHr = getChecked(settingsUI.twelveHr);
+  settings.showSeconds = getChecked(settingsUI.showSeconds);
+  settings.showDayDate = getChecked(settingsUI.showDayDate);
+  setMallocString(&settings.tz, lv_textarea_get_text(settingsUI.tz));
+
+  for (int k = 0; k < 3; ++k) {
+    setMallocString(&settings.ntp[k], lv_textarea_get_text(settingsUI.ntp[k]));
+  }
+}
+
+
 static void dialogButtonClickedCB(lv_event_t *ev) {
   lv_obj_t *p = lv_event_get_user_data(ev);
 
   if (p == settingsUI.ok) {
-    ESP_LOGI(TAG, "OK click action goes here");
+    settingsHandleOK();
+    settingsDismiss();
   } else if (p == settingsUI.cancel) {
-    lv_screen_load(timeUI.screen);
+    settingsDismiss();
   }
+}
+
+
+static void setChecked(lv_obj_t *checkbox, int value) {
+
+  if (value)
+    lv_obj_add_state(checkbox, LV_STATE_CHECKED);
+  else
+    lv_obj_remove_state(checkbox, LV_STATE_CHECKED);
 }
 
 
@@ -460,43 +505,73 @@ static void setupSettingsUI(void) {
   lv_label_set_text(p, "Settings");
   lv_obj_add_style(p, &styles.pageHeader, LV_PART_MAIN);
   lv_obj_align(p, LV_ALIGN_TOP_MID, 0, 25);
-  lv_obj_set_width(p, lv_pct(80));
+  lv_obj_set_width(p, lv_pct(90));
 
   p = settingsUI.twelveHr = lv_checkbox_create(settingsUI.screen);
   lv_checkbox_set_text(p, "12-hour time format");
-  lv_obj_align(p, LV_ALIGN_TOP_LEFT, 20, 175);
+  lv_obj_align(p, LV_ALIGN_TOP_LEFT, 80, 75);
+  setChecked(p, settings.twelveHr);
 
   p = settingsUI.showSeconds = lv_checkbox_create(settingsUI.screen);
   lv_checkbox_set_text(p, "Show seconds");
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 10);
   lv_obj_align_to(p, settingsUI.twelveHr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  setChecked(p, settings.showSeconds);
 
   p = settingsUI.showDayDate = lv_checkbox_create(settingsUI.screen);
   lv_checkbox_set_text(p, "Show day/date");
   lv_obj_align(p, LV_ALIGN_BOTTOM_LEFT, 0, 10);
   lv_obj_align_to(p, settingsUI.showSeconds, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
+  setChecked(p, settings.showDayDate);
 
-  static const int32_t ntpRowHeight = 35;
-  static const int32_t ntpGridCols[] = {150, 250, LV_GRID_TEMPLATE_LAST};
-  static const int32_t ntpGridRows[] = {ntpRowHeight, ntpRowHeight, ntpRowHeight, LV_GRID_TEMPLATE_LAST};
+  static const int32_t tbRowHeight = 35;
+  static const int32_t ntpGridCols[] = {75, 250, LV_GRID_TEMPLATE_LAST};
+  static const int32_t ntpGridRows[] = {tbRowHeight, tbRowHeight, tbRowHeight, LV_GRID_TEMPLATE_LAST};
   settingsUI.ntpGrid = lv_obj_create(settingsUI.screen);
   lv_obj_set_grid_dsc_array(settingsUI.ntpGrid, ntpGridCols, ntpGridRows);
   lv_obj_set_layout(settingsUI.ntpGrid, LV_LAYOUT_GRID);
-  lv_obj_set_size(settingsUI.ntpGrid, 450, ntpRowHeight * 3 + 100);
+  lv_obj_set_size(settingsUI.ntpGrid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_align(settingsUI.ntpGrid, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-  lv_obj_align_to(settingsUI.ntpGrid, settingsUI.twelveHr, LV_ALIGN_TOP_LEFT, 200, 0);
+  lv_obj_align_to(settingsUI.ntpGrid, settingsUI.twelveHr, LV_ALIGN_TOP_LEFT, 275, 0);
+  lv_obj_add_style(settingsUI.ntpGrid, &styles.base, 0);
 
   for (int k = 0; k < 3; ++k) {
     lv_obj_t *label = lv_label_create(settingsUI.ntpGrid);
     lv_label_set_text_fmt(label, "NTP #%d", k);
     lv_obj_set_grid_cell(label, LV_GRID_ALIGN_END, 0, 1, LV_GRID_ALIGN_CENTER, k, 1);
     lv_obj_t *ta = lv_textarea_create(settingsUI.ntpGrid);
-    lv_textarea_set_text(ta, "");
+    lv_textarea_set_text(ta, settings.ntp[k]);
     lv_textarea_set_one_line(ta, true);
     lv_obj_set_width(ta, 220);
     lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, k, 1);
     settingsUI.ntp[k] = ta;
   }
+
+  lv_obj_update_layout(settingsUI.ntpGrid);
+
+  static const int32_t tzGridCols[] = {75, 450, LV_GRID_TEMPLATE_LAST};
+  static const int32_t tzGridRows[] = {tbRowHeight, LV_GRID_TEMPLATE_LAST};
+  settingsUI.tzGrid = lv_obj_create(settingsUI.screen);
+  lv_obj_set_grid_dsc_array(settingsUI.tzGrid, tzGridCols, tzGridRows);
+  lv_obj_set_layout(settingsUI.tzGrid, LV_LAYOUT_GRID);
+  lv_obj_set_size(settingsUI.tzGrid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_align(settingsUI.tzGrid, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+  lv_obj_align_to(settingsUI.tzGrid, settingsUI.ntpGrid, LV_ALIGN_BOTTOM_LEFT, -250, 100);
+  lv_obj_add_style(settingsUI.tzGrid, &styles.base, 0);
+
+  lv_obj_t *label = lv_label_create(settingsUI.tzGrid);
+  lv_label_set_text_static(label, "TZ string");
+  lv_obj_set_grid_cell(label, LV_GRID_ALIGN_END, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
+  lv_obj_t *ta = lv_textarea_create(settingsUI.tzGrid);
+  lv_textarea_set_text(ta, settings.tz);
+  lv_textarea_set_one_line(ta, true);
+  lv_obj_set_width(ta, 420);
+  lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, 0, 1);
+  settingsUI.tz = ta;
+
+  lv_obj_update_layout(settingsUI.tzGrid);
+
+
 
   /*
   p = settingsUI.ntp[0] = makeTextBox(settingsUI.screen, "NTP #1:", 220);
