@@ -7,6 +7,10 @@
 
 static const char *TAG = "wallclockUI";
 
+static const int SCREENW = 800;
+static const int SCREENH = 480;
+
+
 // THIS COULD BE HELPFUL:
 // https://components.espressif.com/components/espressif/esp_lvgl_port
 // https://github.com/pjaos/mgos_esp32_littlevgl_wifi_setup/tree/master
@@ -87,21 +91,43 @@ extern const lv_img_dsc_t visible;
 extern const lv_img_dsc_t invisible;
 extern const lv_img_dsc_t cog;
 
-
-static struct {
-  lv_style_t base;
-  lv_style_t icon;
-  lv_style_t widget;
-  lv_style_t time;
-  lv_style_t selectedItem;
-  lv_style_t pageHeader;
-} styles;
-
-
 static lv_disp_t *disp;
 static lv_obj_t *keyboard;
 extern lv_font_t LoraBold240;
 extern lv_font_t RobotoMedium40;
+
+
+#define HEX_TO_LV_COLOR(H) {			\
+    .red = 0xFF & ((uint32_t) (H) >> 16),	\
+    .green = 0xFF & ((uint32_t) (H) >> 8),	\
+    .blue = 0xFF & (uint32_t) (H)		\
+}
+
+static const lv_style_const_prop_t baseStyleProps[] = {
+  LV_STYLE_CONST_BG_COLOR(HEX_TO_LV_COLOR(0x222244)),
+  LV_STYLE_CONST_TEXT_COLOR(HEX_TO_LV_COLOR(0xAAAAAA)),
+};
+LV_STYLE_CONST_INIT(baseStyle, baseStyleProps);
+
+static const lv_style_const_prop_t iconStyleProps[] = {
+  LV_STYLE_CONST_BORDER_COLOR(HEX_TO_LV_COLOR(0x555588)),
+  LV_STYLE_CONST_BORDER_WIDTH(2),
+};
+LV_STYLE_CONST_INIT(iconStyle, iconStyleProps);
+
+static const lv_style_const_prop_t pageHeaderStyleProps[] = {
+  LV_STYLE_CONST_BG_OPA(LV_OPA_COVER),
+  LV_STYLE_CONST_BG_COLOR(HEX_TO_LV_COLOR(0xFCFCAA)),
+  LV_STYLE_CONST_BORDER_COLOR(HEX_TO_LV_COLOR(0xFCFCAA)),
+  LV_STYLE_CONST_TEXT_COLOR(HEX_TO_LV_COLOR(0x000000)),
+  LV_STYLE_CONST_TEXT_FONT(&RobotoMedium40),
+};
+LV_STYLE_CONST_INIT(pageHeaderStyle, pageHeaderStyleProps);
+
+static const lv_style_const_prop_t buttonStyleProps[] = {
+  LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
+};
+LV_STYLE_CONST_INIT(buttonStyle, buttonStyleProps);
 
 
 // The display has one LVGL "screen" loaded at a time, and this is
@@ -132,13 +158,12 @@ static struct {
 
 static struct {
   lv_obj_t *screen;		/* Screen to load to show dialog */
+  lv_obj_t *grid;		/* Grid to which we align all the stuff */
   lv_obj_t *pageHeader;		/* Heading at top of dialog */
   lv_obj_t *twelveHr;		/* Checkbox */
   lv_obj_t *showSeconds;	/* Checkbox */
   lv_obj_t *showDayDate;	/* Checkbox */
-  lv_obj_t *ntpGrid;		/* Grid for NTP text boxes */
   lv_obj_t *ntp[N_NTP_SERVERS];	/* Each is a textarea */
-  lv_obj_t *tzGrid;		/* Grid for TZ text box */
   lv_obj_t *tz;			/* Timezone in TZ envar format (e.g., PST-08 for US Pacific) */
   lv_obj_t *wifi;		/* Table of WiFi access points */
   lv_obj_t *ok;			/* Button */
@@ -192,6 +217,16 @@ extern void ReadSettings(void);
 #define ESP_LOGW(TAG, FMT, VA...) fprintf(stderr, "[Warn] %25s: " FMT "\n", TAG, ##VA)
 #define ESP_LOGE(TAG, FMT, VA...) fprintf(stderr, "[Err!] %25s: " FMT "\n", TAG, ##VA)
 #endif
+
+
+static inline int max(const int a, const int b) {
+  return a > b ? a : b;
+}
+
+
+static inline int min(const int a, const int b) {
+  return a < b ? a : b;
+}
 
 
 // Timer callback for updating the displayed time and date every period.
@@ -250,7 +285,7 @@ static void setupClockUI(void) {
   ESP_LOGI(TAG, "[set up clock UI]");
 
   p = timeUI.screen = lv_obj_create(NULL);
-  lv_obj_add_style(p, &styles.base, LV_PART_MAIN);
+  lv_obj_add_style(p, &baseStyle, LV_PART_MAIN);
 
   // Set up the default style for the large-ish text. Most of the
   // objects on this screen use this.
@@ -317,7 +352,7 @@ static void setupClockUI(void) {
   // The settings (cog) button's image
   lv_obj_t *cogImg = lv_img_create(p);
   lv_img_set_src(cogImg, &cog);
-  lv_obj_add_style(cogImg, &styles.icon, LV_PART_MAIN);
+  lv_obj_add_style(cogImg, &iconStyle, LV_PART_MAIN);
   lv_obj_center(cogImg);
 
   lv_obj_update_layout(timeUI.screen);
@@ -344,68 +379,6 @@ static void networkScanner(void) {
 #endif
 
 
-// Define each style by initializing its static variable as a new
-// style and calling each of the SETTINGS style setting functions with
-// their respective parameters.
-static void setupStyles(void) {
-
-#define INIT(STYLE)			lv_style_init(&styles.STYLE)
-#define SET(STYLE,ATTR,PARMS...)	lv_style_set_##ATTR(&styles.STYLE, PARMS)
-
-  INIT(base);
-  SET(base, bg_color, lv_color_hex(0x222244));
-  SET(base, text_color, lv_color_hex(0xAAAAAA));
-
-  INIT(icon);
-  SET(icon, border_color, lv_color_hex(0x555588));
-  SET(icon, border_width, 2);
-  SET(icon, pad_all, 16);
-
-  INIT(widget);
-  SET(widget, text_font, &lv_font_montserrat_24);
-
-  INIT(pageHeader);
-  SET(pageHeader, bg_color, lv_color_hex(0xFCFCAA));
-  SET(pageHeader, bg_opa, LV_OPA_COVER);
-  SET(pageHeader, text_color, lv_color_black());
-  SET(pageHeader, text_font, &RobotoMedium40);
-
-#define STYLES								\
-  DO1(statusStyle,							\
-      SET1(text_font, &lv_font_montserrat_10))				\
-  DO1(buttonStyle,							\
-      SET1(border_color, lv_palette_main(LV_PALETTE_GREY)))		\
-  DO1(okButtonStyle,							\
-      SET1(border_color, lv_palette_main(LV_PALETTE_GREEN)))		\
-  DO1(cancelButtonStyle,						\
-      SET1(border_color, lv_palette_main(LV_PALETTE_ORANGE)))		\
-  DO1(popupStyle,							\
-      SET1(bg_color, lv_palette_main(LV_PALETTE_ORANGE)))
-
-// First, declare the static variables for our styles
-#define DO1(S, SETTINGS...)	static lv_style_t S;
-    STYLES
-#undef DO1
-
-
-#define SET1(F, ARGS...)	lv_style_set_ ## F(s, ARGS);
-
-#define DO1(S, SETTINGS...)			\
-  {						\
-    lv_style_t *s = &S;				\
-    lv_style_init(s);				\
-    SETTINGS					\
-  }
-
-  STYLES
-#undef SET1
-#undef DO1
-
-#undef SET
-#undef INIT
-}
-
-
 static void setupKeyboard(void) {
   keyboard = lv_keyboard_create(lv_scr_act());
   lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
@@ -429,10 +402,11 @@ static lv_obj_t *makeTextBox(lv_obj_t *parent, const char *prompt, int taWidth) 
 
 
 static lv_obj_t *makeLabelButton(lv_obj_t *parent, const char *labelText) {
-  lv_obj_t *buttonP = lv_btn_create(parent);
-  lv_obj_t *labelP = lv_label_create(buttonP);
-  lv_label_set_text(labelP, labelText);
-  return buttonP;
+  lv_obj_t *button = lv_btn_create(parent);
+  lv_obj_t *label = lv_label_create(button);
+  lv_label_set_text(label, labelText);
+  lv_obj_center(label);
+  return button;
 }
 
 
@@ -505,74 +479,103 @@ static void setChecked(lv_obj_t *checkbox, int value) {
 
 static void setupSettingsUI(void) {
   lv_obj_t *p;
+  int32_t row;
 
   settingsUI.screen = lv_obj_create(NULL);
-  lv_obj_add_style(settingsUI.screen, &styles.base, LV_PART_MAIN);
-
-  p = settingsUI.pageHeader = lv_label_create(settingsUI.screen);
-  lv_label_set_text(p, "Settings");
-  lv_obj_add_style(p, &styles.pageHeader, LV_PART_MAIN);
-  lv_obj_align(p, LV_ALIGN_TOP_MID, 0, 25);
-  lv_obj_set_width(p, lv_pct(90));
-
-  static const int32_t marginBelowHeading = 20;
-  p = settingsUI.twelveHr = lv_checkbox_create(settingsUI.screen);
-  lv_checkbox_set_text(p, "12-hour time format");
-  lv_obj_align_to(p, settingsUI.pageHeader, LV_ALIGN_OUT_BOTTOM_LEFT, 0, marginBelowHeading);
-  setChecked(p, settings.twelveHr);
-
-  p = settingsUI.showSeconds = lv_checkbox_create(settingsUI.screen);
-  lv_checkbox_set_text(p, "Show seconds");
-  lv_obj_align_to(p, settingsUI.twelveHr, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
-  setChecked(p, settings.showSeconds);
-
-  p = settingsUI.showDayDate = lv_checkbox_create(settingsUI.screen);
-  lv_checkbox_set_text(p, "Show day/date");
-  lv_obj_align_to(p, settingsUI.showSeconds, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
-  setChecked(p, settings.showDayDate);
-
-  p = settingsUI.wifi = lv_table_create(settingsUI.screen);
-  lv_obj_set_size(p, 300, 190);
-  lv_obj_align_to(p, settingsUI.showDayDate, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 10);
-  lv_obj_set_style_bg_color(p, lv_color_hex(0x992299), LV_PART_MAIN);
+  lv_obj_add_style(settingsUI.screen, &baseStyle, LV_PART_MAIN);
 
   static const int32_t tbRowHeight = 35;
-  static const int32_t tbRowWidth = 250;
-  static const int32_t tbLabelWidth = 50;
-  static const int32_t ntpGridCols[] = {tbLabelWidth, tbRowWidth, LV_GRID_TEMPLATE_LAST};
-  static const int32_t ntpGridRows[] = {tbRowHeight, tbRowHeight, tbRowHeight, LV_GRID_TEMPLATE_LAST};
-  settingsUI.ntpGrid = lv_obj_create(settingsUI.screen);
-  lv_obj_set_grid_dsc_array(settingsUI.ntpGrid, ntpGridCols, ntpGridRows);
-  lv_obj_set_layout(settingsUI.ntpGrid, LV_LAYOUT_GRID);
-  lv_obj_set_size(settingsUI.ntpGrid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_align(p, LV_ALIGN_TOP_RIGHT, 0, 0);
-  lv_obj_align_to(settingsUI.ntpGrid, settingsUI.pageHeader, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, marginBelowHeading);
-  lv_obj_add_style(settingsUI.ntpGrid, &styles.base, 0);
+  static const int32_t tbRowWidth = 200;
+  static const int32_t tbLabelWidth = 75;
 
-  for (int k = 0; k < 3; ++k) {
-    lv_obj_t *label = lv_label_create(settingsUI.ntpGrid);
+  static const int32_t gridCols[] = {
+    0.8 * SCREENW / 2,		/* checkboxes and WiFi list */
+    tbLabelWidth,		/* text box labels  */
+    0.8 * SCREENW / 2 - tbLabelWidth, /* textentry areas */
+    LV_GRID_TEMPLATE_LAST};
+  static const int32_t gridRows[] = {
+    50,				/* Page heading */
+    tbRowHeight,		/* 12hr		|  NTP 0 */
+    tbRowHeight,		/* show seconds |  NTP 1 */
+    tbRowHeight,		/* show day/date|  NTP 2 */
+    tbRowHeight,		/* start of wifi|  TZ string */
+    tbRowHeight,		/* more wifi    |  <empty> */
+    tbRowHeight,		/* more wifi    |  <empty> */
+    50,				/* OK/Cancel buttons */
+    LV_GRID_TEMPLATE_LAST};
+  p = settingsUI.grid = lv_obj_create(settingsUI.screen);
+  lv_obj_set_grid_dsc_array(p, gridCols, gridRows);
+  lv_obj_set_layout(p, LV_LAYOUT_GRID);
+  lv_obj_set_size(p, lv_pct(95), lv_pct(95));
+  lv_obj_set_style_bg_color(p, lv_color_hex(0x555577), LV_PART_MAIN);
+  lv_obj_center(p);
+
+  // Dialog title
+  p = settingsUI.pageHeader = lv_label_create(settingsUI.grid);
+  lv_label_set_text(p, "Settings");
+  lv_obj_set_width(p, lv_pct(100));
+  lv_obj_set_grid_cell(p, LV_GRID_ALIGN_CENTER, 0, 3, LV_GRID_ALIGN_START, 0, 1);
+  lv_obj_set_style_text_align(p, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+  lv_obj_add_style(p, &pageHeaderStyle, LV_PART_MAIN);
+
+  // Checkboxes
+  row = 1;
+  static const int32_t marginBelowHeading = 20;
+  p = settingsUI.twelveHr = lv_checkbox_create(settingsUI.grid);
+  lv_checkbox_set_text(p, "12-hour time format");
+  lv_obj_set_grid_cell(p, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row++, 1);
+  setChecked(p, settings.twelveHr);
+
+  p = settingsUI.showSeconds = lv_checkbox_create(settingsUI.grid);
+  lv_checkbox_set_text(p, "Show seconds");
+  lv_obj_set_grid_cell(p, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row++, 1);
+  setChecked(p, settings.showSeconds);
+
+  p = settingsUI.showDayDate = lv_checkbox_create(settingsUI.grid);
+  lv_checkbox_set_text(p, "Show day/date");
+  lv_obj_set_grid_cell(p, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_CENTER, row++, 1);
+  setChecked(p, settings.showDayDate);
+
+  // WIFI selector
+  p = settingsUI.wifi = lv_table_create(settingsUI.grid);
+  lv_table_set_column_width(p, 0, lv_pct(45));
+  lv_obj_set_style_pad_left(p, 0, LV_PART_ITEMS);
+  lv_obj_set_style_pad_top(p, 0, LV_PART_ITEMS);
+  lv_obj_set_style_pad_bottom(p, 0, LV_PART_ITEMS);
+  lv_obj_set_grid_cell(p, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, row, 3);
+  lv_obj_set_style_bg_color(p, lv_color_hex(0xaaaaaa), LV_PART_ITEMS);
+  lv_obj_set_size(p, SCREENW * 0.4, SCREENH * 0.3);
+
+  for (int k=0; k < 50; ++k) {
+    lv_table_set_cell_value_fmt(p, k, 0, "WiFi %03d", k);
+  }
+
+  // NTP servers
+  row = 1;
+  for (int k = 0; k < 3; ++k, ++row) {
+    lv_obj_t *label = lv_label_create(settingsUI.grid);
     lv_label_set_text_fmt(label, "NTP #%d", k);
-    lv_obj_set_grid_cell(label, LV_GRID_ALIGN_END, 0, 1, LV_GRID_ALIGN_CENTER, k, 1);
-    lv_obj_t *ta = lv_textarea_create(settingsUI.ntpGrid);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+    lv_obj_set_grid_cell(label, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, row, 1);
+    lv_obj_t *ta = lv_textarea_create(settingsUI.grid);
     lv_textarea_set_text(ta, settings.ntp[k]);
     lv_textarea_set_one_line(ta, true);
-    lv_obj_set_width(ta, tbRowWidth);
-    lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, k, 1);
+    lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 2, 1, LV_GRID_ALIGN_CENTER, row, 1);
     settingsUI.ntp[k] = ta;
   }
 
-  lv_obj_update_layout(settingsUI.ntpGrid);
-
+#if 0
+  // Timezone string
   static const int32_t tzGridCols[] = {tbLabelWidth, tbRowWidth, LV_GRID_TEMPLATE_LAST};
   static const int32_t tzGridRows[] = {tbRowHeight, LV_GRID_TEMPLATE_LAST};
-  settingsUI.tzGrid = lv_obj_create(settingsUI.screen);
+  settingsUI.tzGrid = lv_obj_create(settingsUI.grid);
   lv_obj_set_grid_dsc_array(settingsUI.tzGrid, tzGridCols, tzGridRows);
   lv_obj_set_layout(settingsUI.tzGrid, LV_LAYOUT_GRID);
   lv_obj_set_size(settingsUI.tzGrid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
   lv_obj_align(settingsUI.tzGrid, LV_ALIGN_TOP_RIGHT, 0, 0);
-  lv_obj_align_to(settingsUI.tzGrid, settingsUI.ntpGrid, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
-  lv_obj_add_style(settingsUI.tzGrid, &styles.base, 0);
-  lv_obj_update_layout(settingsUI.ntpGrid);
+  lv_obj_align_to(settingsUI.tzGrid, settingsUI.grid, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
+  lv_obj_add_style(settingsUI.tzGrid, &baseStyle, 0);
+  lv_obj_update_layout(settingsUI.grid);
 
   lv_obj_t *label = lv_label_create(settingsUI.tzGrid);
   lv_label_set_text_static(label, "TZ string");
@@ -585,20 +588,21 @@ static void setupSettingsUI(void) {
   settingsUI.tz = ta;
 
   lv_obj_update_layout(settingsUI.tzGrid);
+#endif
 
-  // The OK/Cancel buttons are in a horizontal row aligned a little
   // above the bottom of the screen with their edges (left for OK,
   // right for Cancel) the same distance from the center of the screen
   // in opposite directions.
-  p = settingsUI.ok = makeLabelButton(settingsUI.screen, "OK");
-  lv_obj_set_width(p, 150);
-  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, -100, -75);
-  lv_obj_add_event_cb(p, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
 
-  p = settingsUI.cancel = makeLabelButton(settingsUI.screen, "Cancel");
-  lv_obj_set_width(p, 150);
-  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_OUT_BOTTOM_MID, 100, -75);
-  lv_obj_add_event_cb(p, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
+  static const char *buttonMap[] = {"OK", "Cancel", NULL};
+  lv_obj_t *buttons = lv_buttonmatrix_create(settingsUI.screen);
+  lv_buttonmatrix_set_map(buttons, buttonMap);
+  lv_obj_add_event_cb(buttons, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
+  lv_obj_set_content_height(buttons, 25);
+  lv_obj_set_style_bg_opa(buttons, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(buttons, 0, LV_PART_MAIN);
+  lv_obj_add_style(buttons, &buttonStyle, 0);
+  lv_obj_align_to(buttons, settingsUI.screen, LV_ALIGN_BOTTOM_MID, 0, -20);
 
   lv_obj_update_layout(settingsUI.screen);
 }
@@ -669,7 +673,6 @@ static void buttonEventCB(lv_event_t *e) {
 
 void SetupWallclockUI(void) {
   ReadSettings();
-  setupStyles();
   setupClockUI();
   setupKeyboard();
   setupPasswordUI();
@@ -728,7 +731,7 @@ void ReadSettings(void) {
 int main(int argc, char *argv[]) {
   setlinebuf(stderr);
   lv_init();
-  hal_init(800, 480);
+  hal_init(SCREENW, SCREENH);
 
   SetupWallclockUI();
 
