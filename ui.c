@@ -95,6 +95,7 @@ static lv_disp_t *disp;
 static lv_obj_t *keyboard;
 extern lv_font_t LoraBold240;
 extern lv_font_t RobotoMedium40;
+extern lv_font_t IBMPlexMonoRegular12;
 
 
 #define HEX_TO_LV_COLOR(H) {			\
@@ -128,6 +129,17 @@ static const lv_style_const_prop_t buttonStyleProps[] = {
   LV_STYLE_CONST_TEXT_ALIGN(LV_TEXT_ALIGN_CENTER),
 };
 LV_STYLE_CONST_INIT(buttonStyle, buttonStyleProps);
+
+
+static const lv_style_const_prop_t wifiStyleProps[] = {
+  LV_STYLE_CONST_TEXT_FONT(&IBMPlexMonoRegular12),
+  LV_STYLE_CONST_PAD_RIGHT(0),
+  LV_STYLE_CONST_PAD_LEFT(0),
+  LV_STYLE_CONST_PAD_TOP(1),
+  LV_STYLE_CONST_PAD_BOTTOM(1),
+  LV_STYLE_CONST_BG_COLOR(HEX_TO_LV_COLOR(0xcccccc)),
+};
+LV_STYLE_CONST_INIT(wifiStyle, wifiStyleProps);
 
 
 // The display has one LVGL "screen" loaded at a time, and this is
@@ -546,17 +558,21 @@ static void setupSettingsUI(void) {
 
   // WIFI selector
   p = settingsUI.wifi = lv_table_create(settingsUI.grid);
+  lv_obj_add_style(p, &wifiStyle, LV_PART_ITEMS);
   lv_table_set_column_width(p, 0, lv_pct(45));
-  lv_obj_set_style_pad_left(p, 0, LV_PART_ITEMS);
-  lv_obj_set_style_pad_top(p, 0, LV_PART_ITEMS);
-  lv_obj_set_style_pad_bottom(p, 0, LV_PART_ITEMS);
   lv_obj_set_grid_cell(p, LV_GRID_ALIGN_START, 0, 1, LV_GRID_ALIGN_START, row, 3);
-  lv_obj_set_style_bg_color(p, lv_color_hex(0xaaaaaa), LV_PART_ITEMS);
   lv_obj_set_size(p, SCREENW * 0.4, SCREENH * 0.3);
 
   for (int k=0; k < 50; ++k) {
-    lv_table_set_cell_value_fmt(p, k, 0, "WiFi %03d", k);
+    // Show odd numbered entries as locked else open
+    lv_table_set_cell_value_fmt(p, k, 0, "%s WiFi %03d", (k & 1) ? "X" : "+", k);
   }
+
+  // WIFI legend below selector
+  p = lv_label_create(settingsUI.screen);
+  lv_label_set_text_static(p, "+ is open  X is requies password");
+  lv_obj_set_style_text_font(p, &IBMPlexMonoRegular12, LV_PART_MAIN);
+  lv_obj_align_to(p, settingsUI.wifi, LV_ALIGN_BOTTOM_LEFT, 20, 20);
 
   // NTP servers
   row = 1;
@@ -597,7 +613,9 @@ static void setupSettingsUI(void) {
 }
 
 
-void addWifiSSID(const char *name) {
+// Pass a list of `n` WiFi access points to be placed on the list.
+// This list may be deallocated after this call is made.
+void setWifiList(const WifiEntry *apList, int n) {
 }
 
 
@@ -612,12 +630,16 @@ void SetupWallclockUI(void) {
 
 
 #if LV_PC_SIM
+
+#endif
+
+
+#if LV_PC_SIM
 /**
  * Initialize the Hardware Abstraction Layer (HAL) for the LVGL graphics
  * library
  */
-static lv_display_t * hal_init(int32_t w, int32_t h)
-{
+static lv_display_t * hal_init(int32_t w, int32_t h) {
   lv_group_set_default(lv_group_create());
 
   lv_display_t * disp = lv_sdl_window_create(w, h);
@@ -672,7 +694,7 @@ int main(int argc, char *argv[]) {
       /* Periodically call the lv_task handler.
        * It could be done in a timer interrupt or an OS task too.*/
       lv_timer_handler();
-      usleep(10* 1000);
+      usleep(10*1000);
   }
 }
 #endif

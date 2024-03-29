@@ -27,7 +27,7 @@ target_include_directories(lvgl PUBLIC ${PROJECT_SOURCE_DIR} ${SDL2_INCLUDE_DIRS
 
 add_executable(main mouse_cursor_icon.c
   ui.c cog.c invisible.c visible.c
-  LoraBold240.c LoraBold40.c LoraBold64.c RobotoMedium40.c)
+  LoraBold240.c LoraBold40.c LoraBold64.c IBMPlexMonoRegular12.c RobotoMedium40.c)
 
 target_compile_definitions(main PRIVATE LV_CONF_INCLUDE_SIMPLE)
 target_link_libraries(main lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES} m pthread)

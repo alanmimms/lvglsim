@@ -14,4 +14,12 @@ typedef struct Settings {
 
 extern Settings settings;
 
+
+// An array of these is used for the SSID pick list UI.
+typedef struct WifiEntry {
+  char *ssid;			/* Name of the AP */
+  int rssi;			/* Signal strength indicator */
+  bool locked;			/* True if authentication required */
+} WifiEntry;
+
 #endif // __SETTINGS_H__
