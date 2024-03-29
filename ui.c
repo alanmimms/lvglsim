@@ -166,8 +166,7 @@ static struct {
   lv_obj_t *ntp[N_NTP_SERVERS];	/* Each is a textarea */
   lv_obj_t *tz;			/* Timezone in TZ envar format (e.g., PST-08 for US Pacific) */
   lv_obj_t *wifi;		/* Table of WiFi access points */
-  lv_obj_t *ok;			/* Button */
-  lv_obj_t *cancel;		/* Button */
+  lv_obj_t *buttons;		/* OK and cancel buttons */
 } settingsUI;
 
 
@@ -458,12 +457,21 @@ static void settingsHandleOK(void) {
 
 static void dialogButtonClickedCB(lv_event_t *ev) {
   lv_obj_t *p = lv_event_get_user_data(ev);
+  uint32_t buttonID = lv_buttonmatrix_get_selected_button(p);
 
-  if (p == settingsUI.ok) {
+  switch (buttonID) {
+  case 0:			/* OK */
     settingsHandleOK();
     settingsDismiss();
-  } else if (p == settingsUI.cancel) {
+    break;
+
+  case 1:			/* Cancel */
     settingsDismiss();
+    break;
+
+  default:
+    ESP_LOGE(TAG, "dialogButtonClickedCB buttonmatrix click in unknown button ID %d", buttonID);
+    break;
   }
 }
 
@@ -564,111 +572,33 @@ static void setupSettingsUI(void) {
     settingsUI.ntp[k] = ta;
   }
 
-#if 0
   // Timezone string
-  static const int32_t tzGridCols[] = {tbLabelWidth, tbRowWidth, LV_GRID_TEMPLATE_LAST};
-  static const int32_t tzGridRows[] = {tbRowHeight, LV_GRID_TEMPLATE_LAST};
-  settingsUI.tzGrid = lv_obj_create(settingsUI.grid);
-  lv_obj_set_grid_dsc_array(settingsUI.tzGrid, tzGridCols, tzGridRows);
-  lv_obj_set_layout(settingsUI.tzGrid, LV_LAYOUT_GRID);
-  lv_obj_set_size(settingsUI.tzGrid, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-  lv_obj_align(settingsUI.tzGrid, LV_ALIGN_TOP_RIGHT, 0, 0);
-  lv_obj_align_to(settingsUI.tzGrid, settingsUI.grid, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 20);
-  lv_obj_add_style(settingsUI.tzGrid, &baseStyle, 0);
-  lv_obj_update_layout(settingsUI.grid);
-
-  lv_obj_t *label = lv_label_create(settingsUI.tzGrid);
-  lv_label_set_text_static(label, "TZ string");
-  lv_obj_set_grid_cell(label, LV_GRID_ALIGN_END, 0, 1, LV_GRID_ALIGN_CENTER, 0, 1);
-  lv_obj_t *ta = lv_textarea_create(settingsUI.tzGrid);
+  lv_obj_t *label = lv_label_create(settingsUI.grid);
+  lv_label_set_text_fmt(label, "TZ string");
+  lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN);
+  lv_obj_set_grid_cell(label, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, row, 2);
+  lv_obj_t *ta = lv_textarea_create(settingsUI.grid);
   lv_textarea_set_text(ta, settings.tz);
   lv_textarea_set_one_line(ta, true);
-  lv_obj_set_width(ta, 250);
-  lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 1, 1, LV_GRID_ALIGN_CENTER, 0, 1);
+  lv_obj_set_grid_cell(ta, LV_GRID_ALIGN_START, 2, 1, LV_GRID_ALIGN_CENTER, row, 2);
   settingsUI.tz = ta;
 
-  lv_obj_update_layout(settingsUI.tzGrid);
-#endif
-
-  // above the bottom of the screen with their edges (left for OK,
-  // right for Cancel) the same distance from the center of the screen
-  // in opposite directions.
-
   static const char *buttonMap[] = {"OK", "Cancel", NULL};
-  lv_obj_t *buttons = lv_buttonmatrix_create(settingsUI.screen);
-  lv_buttonmatrix_set_map(buttons, buttonMap);
-  lv_obj_add_event_cb(buttons, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
-  lv_obj_set_content_height(buttons, 25);
-  lv_obj_set_style_bg_opa(buttons, LV_OPA_TRANSP, LV_PART_MAIN);
-  lv_obj_set_style_border_width(buttons, 0, LV_PART_MAIN);
-  lv_obj_add_style(buttons, &buttonStyle, 0);
-  lv_obj_align_to(buttons, settingsUI.screen, LV_ALIGN_BOTTOM_MID, 0, -20);
+  p = settingsUI.buttons = lv_buttonmatrix_create(settingsUI.screen);
+  lv_buttonmatrix_set_map(p, buttonMap);
+  lv_obj_add_event_cb(p, dialogButtonClickedCB, LV_EVENT_CLICKED, p);
+  lv_obj_set_content_height(p, 25);
+  lv_obj_set_style_bg_opa(p, LV_OPA_TRANSP, LV_PART_MAIN);
+  lv_obj_set_style_border_width(p, 0, LV_PART_MAIN);
+  lv_obj_add_style(p, &buttonStyle, 0);
+  lv_obj_align_to(p, settingsUI.screen, LV_ALIGN_BOTTOM_MID, 0, -20);
 
   lv_obj_update_layout(settingsUI.screen);
 }
 
 
-#if 0
-static void settingsButtonEventCB(lv_event_t *e) {
-
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    lv_obj_clear_flag(settingsUI.screen, LV_OBJ_FLAG_HIDDEN);
-  }
+void addWifiSSID(const char *name) {
 }
-#endif
-
-
-#if 0
-static void settingsCloseButtonEventCB(lv_event_t *e) {
-
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    lv_obj_add_flag(settingsUI.screen, LV_OBJ_FLAG_HIDDEN);
-  }
-}
-#endif
-
-
-#if 0
-static void mboxConnectButtonEventCB(lv_event_t *e) {
-  if (lv_event_get_code(e) == LV_EVENT_CLICKED) {
-    ssidPW = String(lv_textarea_get_text(mboxPassword));
-    networkConnector();
-    lv_obj_move_background(mboxConnect);
-    popupMsgBox("Connecting!", "Attempting to connect to the selected network.");
-  }
-}
-#endif
-
-
-#if 0
-static void buttonEventCB(lv_event_t *e) {
-  lv_event_code_t code = lv_event_get_code(e);
-  lv_obj_t *btn = lv_event_get_target(e);
-
-  if (code == LV_EVENT_CLICKED) {
-    if (btn == mboxConnectBtn) {
-      ssidPW = String(lv_textarea_get_text(mboxPassword));
-
-      networkConnector();
-      lv_obj_move_background(mboxConnect);
-      popupMsgBox("Connecting!", "Attempting to connect to the selected network.");
-    } else if (btn == mboxCloseBtn) {
-      lv_obj_move_background(mboxConnect);
-    } else if (btn == popupBoxCloseBtn) {
-      lv_obj_move_background(popupBox);
-    }
-
-  } else if (code == LV_EVENT_VALUE_CHANGED) {
-
-    if (ntScanTaskHandler == NULL) {
-      networkStatus = NETWORK_SEARCHING;
-      networkScanner();
-      timer = lv_timer_create(timerForNetwork, 1000, wfList);
-      lv_list_add_text(wfList, "WiFi: Looking for Networks...");
-    }
-  }
-}
-#endif
 
 
 void SetupWallclockUI(void) {
